@@ -127,6 +127,10 @@ int main(int argc, char* argv[]){
             myLHA.setInit();
             myLHA.initLHEF();
 
+            // Tell user the mass and polarization
+            cout << "Mass = " << X_mass << endl;
+            cout << "Polarization = " << polarization << endl;
+
             // Begin event loop.
             int iAbort = 0;
             for (int iEvent = 0; iEvent < nEvent; ++iEvent) 

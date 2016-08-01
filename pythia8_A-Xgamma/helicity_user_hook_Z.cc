@@ -91,7 +91,16 @@ using namespace Pythia8;
         p2.rotbst(Mrotbst);
         process[i1].p( p1 );
         process[i2].p( p2 );
+
+
+        // For transverse polarization, flip between +/- 1
+        if(abs(polarization) == 1.0)
+        {
+            polarization *= -1;
+        }
+
       }
+
       // End of loop over Z's. Do not veto any events.
     }
     return false;
