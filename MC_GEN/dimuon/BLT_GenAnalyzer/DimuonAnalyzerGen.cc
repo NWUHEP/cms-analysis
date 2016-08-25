@@ -174,9 +174,9 @@ Bool_t DimuonAnalyzer::Process(Long64_t entry)
         }
 
         /* Basic Gen Muon Selection */
-        if ((GenMuon1->pt < 5.0) || (GenMuon2->pt < 5.0))
+        /*if ((GenMuon1->pt < 5.0) || (GenMuon2->pt < 5.0))
             return kTRUE;
-
+*/
         if ((abs(GenMuon1->eta) > 2.4) || (abs(GenMuon2->eta) > 2.4))
             return kTRUE;
 
@@ -206,6 +206,19 @@ Bool_t DimuonAnalyzer::Process(Long64_t entry)
     {
         return kTRUE;
     }
+
+    if (abs(GenJet1->pdgId) == 5)
+    {
+        if (abs(GenJet1->eta) > 2.4)
+            return kTRUE;
+    }
+
+    else if (abs(GenJet2->pdgId) == 5)
+    {
+        if (abs(GenJet2->eta) > 2.4)
+            return kTRUE;
+    }
+
     
     /* RECO Acceptance */
     std::vector<TMuon*> muons;
@@ -227,7 +240,10 @@ Bool_t DimuonAnalyzer::Process(Long64_t entry)
         Muon2 = muons[1];
         if ((abs(Muon1->eta) > 2.4) || (abs(Muon2->eta) > 2.4))
             return kTRUE;    
+        if ((Muon1->pt < 5.0) || (Muon2->pt < 5.0))
+            return kTRUE;    
     }
+    
     else
         return kTRUE;
 
@@ -237,6 +253,7 @@ Bool_t DimuonAnalyzer::Process(Long64_t entry)
 
     std::vector<TJet*> bjets;
     std::vector<TJet*> otherjets;
+    std::vector<TJet*> alljets;
 
     for (int i=0; i < jetCollection->GetEntries(); i++) 
     {
@@ -244,20 +261,33 @@ Bool_t DimuonAnalyzer::Process(Long64_t entry)
         assert(jet);
 
         if (jet->csv > 0.898)
+        {
             bjets.push_back(jet);
-        else 
+            alljets.push_back(jet);
+        }
+        else
+        {
             otherjets.push_back(jet);
+            alljets.push_back(jet);
+        }
 
     }
 
     std::sort(bjets.begin(), bjets.end(), sort_by_higher_pt<TJet>);
     std::sort(otherjets.begin(), otherjets.end(), sort_by_higher_pt<TJet>);
+    std::sort(alljets.begin(), alljets.end(), sort_by_higher_pt<TJet>);
+
+    if (alljets.size() < 2)
+        return kTRUE;
+
+    //if (bjets.size() < 1)
+       // return kTRUE;
 
     TJet* recoBJet;
     if (bjets.size() > 0)
     {
         recoBJet = bjets[0];
-        if (abs(recoBJet->eta) > 4.7)
+        if (abs(recoBJet->eta) > 2.4)
             return kTRUE;
     }
     else 
@@ -289,12 +319,31 @@ Bool_t DimuonAnalyzer::Process(Long64_t entry)
    
     float DeltaRLeading = sqrt(pow(abs(GenMuon1->phi - Muon1->phi), 2.0) + pow(abs(GenMuon1->eta - Muon1->eta), 2.0));
     float DeltaRTrailing = sqrt(pow(abs(GenMuon2->phi - Muon2->phi), 2.0) + pow(abs(GenMuon2->eta - Muon2->eta), 2.0));
-    float DeltaRBJet = sqrt(pow(abs(GenBJet->phi - recoBJet->phi), 2.0) + pow(abs(GenBJet->eta - recoBJet->eta), 2.0));
+/*    float DeltaRBJet = sqrt(pow(abs(GenBJet->phi - recoBJet->phi), 2.0) + pow(abs(GenBJet->eta - recoBJet->eta), 2.0));
     float DeltaROtherJet = sqrt(pow(abs(GenOtherJet->phi - recoOtherJet->phi), 2.0) + pow(abs(GenOtherJet->eta - recoOtherJet->eta), 2.0));
+*/
 
+    std::vector<float> BDeltaR_vec; 
+    for (unsigned i = 0; i < alljets.size(); i++)
+    {
+        float myDeltaRval = sqrt(pow(abs(GenBJet->phi - alljets[i]->phi), 2.0) + pow(abs(GenBJet->eta - alljets[i]->eta), 2.0));
+        BDeltaR_vec.push_back(myDeltaRval);
+    }
+    std::sort(BDeltaR_vec.begin(), BDeltaR_vec.end(), std::less<float>());
+    float DeltaRBJet = BDeltaR_vec[0];
+
+    std::vector<float> otherDeltaR_vec; 
+    for (unsigned i = 0; i < alljets.size(); i++)
+    {
+        float myDeltaRval = sqrt(pow(abs(GenOtherJet->phi - alljets[i]->phi), 2.0) + pow(abs(GenOtherJet->eta - alljets[i]->eta), 2.0));
+        otherDeltaR_vec.push_back(myDeltaRval);
+    }
+    std::sort(otherDeltaR_vec.begin(), otherDeltaR_vec.end(), std::less<float>());
+    float DeltaROtherJet = otherDeltaR_vec[0];
+    
     if ((DeltaRLeading > 0.5) || (DeltaRTrailing > 0.5) || (DeltaRBJet > 0.5) || (DeltaROtherJet > 0.5))
         return kTRUE;        
-    
+
 
     runNumber = fInfo->runNum;
     evtNumber = fInfo->evtNum;
