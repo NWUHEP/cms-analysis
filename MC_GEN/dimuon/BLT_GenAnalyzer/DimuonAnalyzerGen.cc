@@ -70,6 +70,8 @@ void DimuonAnalyzer::Begin(TTree *tree)
     outTree->Branch("muonDeltaPhi", &muonDeltaPhi);
     outTree->Branch("muonDeltaEta", &muonDeltaEta);
     outTree->Branch("muonDeltaR", &muonDeltaR);
+
+    outTree->Branch("costheta", &costheta);
         
 
     ReportPostBegin();
@@ -105,6 +107,7 @@ Bool_t DimuonAnalyzer::Process(Long64_t entry)
 
     std::vector<TGenParticle*> GenMuons;
     std::vector<TGenParticle*> GenJets;
+    TLorentzVector GenMuonMinus;
 
     if (!isRealData) {
         for (int i=0; i<fGenParticleArr->GetEntries(); i++) {
@@ -173,10 +176,16 @@ Bool_t DimuonAnalyzer::Process(Long64_t entry)
             copy_p4(GenMuon2, MUON_MASS, GenMuonLead);
         }
 
+        if (GenMuon1->pdgId == 13)
+            copy_p4(GenMuon1, MUON_MASS, GenMuonMinus);
+        else
+            copy_p4(GenMuon2, MUON_MASS, GenMuonMinus);
+
+
         /* Basic Gen Muon Selection */
-        /*if ((GenMuon1->pt < 5.0) || (GenMuon2->pt < 5.0))
+        if ((GenMuon1->pt < 5.0) || (GenMuon2->pt < 5.0))
             return kTRUE;
-*/
+
         if ((abs(GenMuon1->eta) > 2.4) || (abs(GenMuon2->eta) > 2.4))
             return kTRUE;
 
@@ -184,9 +193,36 @@ Bool_t DimuonAnalyzer::Process(Long64_t entry)
         muonDeltaPhi = abs(GenMuon1->phi - GenMuon2->phi);
         muonDeltaEta = abs(GenMuon1->eta - GenMuon2->eta);
         muonDeltaR = sqrt(pow(muonDeltaPhi, 2.0) + pow(muonDeltaEta, 2.0));
+
+
     }
     else
         return kTRUE;
+
+    /* Cos(theta) variable */
+    TLorentzVector Zd_clone = GenZd;
+    TLorentzVector B_clone = GenBQuark;
+    TLorentzVector mu_minus_clone = GenMuonMinus; // Define angle with respect to the negative muon
+
+    TVector3 boost = -1*Zd_clone.BoostVector(); // The boost to move to the Zd rest frame
+    B_clone.Boost(boost);  // Boost the B to Zd rest frame
+    Zd_clone.Boost(boost); // And the Zd itself
+
+    TVector3 B_threevect = B_clone.Vect();
+    TLorentzVector beamAxis(0,0,1,1);
+    beamAxis.Boost(boost); 
+
+    // Rotate the axes of the frame to complete the Lorentz transformation
+    TVector3 axis_z_CM = (-1*B_threevect).Unit(); // Define z axis (angular reference axis) as opposite the direction of the mother particle in the Zd frame
+    TVector3 axis_y_CM = beamAxis.Vect().Cross(B_threevect).Unit();
+    TVector3 axis_x_CM = axis_y_CM.Cross(axis_z_CM).Unit();
+    TRotation rotation;
+    rotation = rotation.RotateAxes(axis_x_CM, axis_y_CM, axis_z_CM).Inverse();
+
+    mu_minus_clone.Boost(boost);
+    mu_minus_clone.Transform(rotation); // rotate and boost the muon
+
+    costheta = mu_minus_clone.CosTheta(); // Feed costheta to the root tree branch
 
 
     /* Basic Gen Jet Selection */
@@ -280,9 +316,6 @@ Bool_t DimuonAnalyzer::Process(Long64_t entry)
     if (alljets.size() < 2)
         return kTRUE;
 
-    //if (bjets.size() < 1)
-       // return kTRUE;
-
     TJet* recoBJet;
     if (bjets.size() > 0)
     {
@@ -319,9 +352,7 @@ Bool_t DimuonAnalyzer::Process(Long64_t entry)
    
     float DeltaRLeading = sqrt(pow(abs(GenMuon1->phi - Muon1->phi), 2.0) + pow(abs(GenMuon1->eta - Muon1->eta), 2.0));
     float DeltaRTrailing = sqrt(pow(abs(GenMuon2->phi - Muon2->phi), 2.0) + pow(abs(GenMuon2->eta - Muon2->eta), 2.0));
-/*    float DeltaRBJet = sqrt(pow(abs(GenBJet->phi - recoBJet->phi), 2.0) + pow(abs(GenBJet->eta - recoBJet->eta), 2.0));
-    float DeltaROtherJet = sqrt(pow(abs(GenOtherJet->phi - recoOtherJet->phi), 2.0) + pow(abs(GenOtherJet->eta - recoOtherJet->eta), 2.0));
-*/
+
 
     std::vector<float> BDeltaR_vec; 
     for (unsigned i = 0; i < alljets.size(); i++)
@@ -343,7 +374,6 @@ Bool_t DimuonAnalyzer::Process(Long64_t entry)
     
     if ((DeltaRLeading > 0.5) || (DeltaRTrailing > 0.5) || (DeltaRBJet > 0.5) || (DeltaROtherJet > 0.5))
         return kTRUE;        
-
 
     runNumber = fInfo->runNum;
     evtNumber = fInfo->evtNum;

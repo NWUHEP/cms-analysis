@@ -75,6 +75,7 @@ public:
     Float_t met, met_phi;
     Float_t jetD0, bjetD0;
     Float_t muonDeltaPhi, muonDeltaEta, muonDeltaR;
+    Double_t costheta;
     UInt_t runNumber, evtNumber, lumiSection;
     UInt_t nJets, nBJets;
 
